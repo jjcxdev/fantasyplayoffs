@@ -178,6 +178,39 @@ export default function Home() {
 
       console.log("Group qualifiers:", { A1, A2, B1, B2, C1, C2 });
 
+      // Find the highest-scoring 2nd place team for bracket balancing
+      const secondPlaceTeams = sortedGroups
+        .map((group, groupIndex) => {
+          if (group.length > 1) {
+            return {
+              ...group[1],
+              groupIndex,
+              groupName: String.fromCharCode(65 + groupIndex),
+            };
+          }
+          return null;
+        })
+        .filter(
+          (team): team is Team & { groupIndex: number; groupName: string } =>
+            team !== null
+        );
+
+      const highestSecondPlace = [...secondPlaceTeams].sort((a, b) => {
+        if (b.pts !== a.pts) return (b.pts || 0) - (a.pts || 0);
+        return (b.gd || 0) - (a.gd || 0);
+      })[0];
+
+      console.log(
+        "2nd place teams:",
+        secondPlaceTeams.map((t) => `${t.groupName}2: ${t.name} (${t.pts} pts)`)
+      );
+      console.log(
+        "Highest 2nd place:",
+        highestSecondPlace
+          ? `${highestSecondPlace.groupName}2: ${highestSecondPlace.name} (${highestSecondPlace.pts} pts)`
+          : "N/A"
+      );
+
       // Calculate wildcards: 2 highest points from 3rd place teams
       const thirdPlaceTeams = sortedGroups
         .map((group, groupIndex) => {
@@ -227,8 +260,29 @@ export default function Home() {
       };
 
       // Helper to apply replacements (same logic as schedule)
+      // Also handles cases where team names might be hardcoded but should be replaced
       const applyReplacements = (value: string): string => {
-        return replacements[value] || value;
+        // First try exact match with replacements
+        if (replacements[value]) {
+          return replacements[value];
+        }
+
+        // If the value is already T1 or T2, return it (no replacement needed)
+        if (value === T1 || value === T2) {
+          return value;
+        }
+
+        // Check if this is a team that's currently in position 1 or 2 but hardcoded
+        // If a team name matches a team in the top 2 positions, ensure we use the current T1/T2
+        // This handles cases where the sheet might have old team names hardcoded
+        const currentTop2Teams = leagueTable.slice(0, 2).map((t) => t.name);
+        if (currentTop2Teams.includes(value)) {
+          // If it's the first place team, use T1; if second place, use T2
+          if (value === T1) return T1;
+          if (value === T2) return T2;
+        }
+
+        return value;
       };
 
       // Get all playoff matches from schedule (gameweeks 31-38)
@@ -257,27 +311,113 @@ export default function Home() {
 
       const allPlayoffMatches = getAllPlayoffMatches();
 
+      // Debug: Check for duplicate IDs
+      console.log("\n=== CHECKING FOR DUPLICATE MATCH IDs ===");
+      const matchIds = allPlayoffMatches.map((m) => m.id).filter(Boolean);
+      const duplicateIds = matchIds.filter(
+        (id, index) => matchIds.indexOf(id) !== index
+      );
+      if (duplicateIds.length > 0) {
+        console.warn("⚠️  DUPLICATE MATCH IDs FOUND:", [
+          ...new Set(duplicateIds),
+        ]);
+        duplicateIds.forEach((dupId) => {
+          const matches = allPlayoffMatches.filter((m) => m.id === dupId);
+          console.warn(
+            `  ID "${dupId}" appears ${matches.length} times:`,
+            matches
+          );
+        });
+      } else {
+        console.log("✅ No duplicate match IDs found");
+      }
+      console.log("All playoff matches:", allPlayoffMatches);
+
       // Helper to find match by ID
       const findMatchById = (id: string) => {
-        const match = allPlayoffMatches.find((m) => m.id === id);
-        if (!match) return null;
+        const matches = allPlayoffMatches.filter((m) => m.id === id);
+        if (matches.length === 0) {
+          console.log(`Match with ID ${id} not found`);
+          return null;
+        }
+        if (matches.length > 1) {
+          console.warn(`⚠️  Multiple matches found with ID ${id}:`, matches);
+        }
+        const match = matches[0];
+        let replacedHome = applyReplacements(match.home);
+        let replacedAway = applyReplacements(match.away);
+
+        // Special handling for SF1 and SF2: if a team name is hardcoded but should be T1/T2, replace it
+        // SF1 should have T1, SF2 should have T2
+        if (id === "SF1") {
+          // If home team is a real team name (not a placeholder like "W QF1"), it should be T1
+          if (
+            replacedHome &&
+            !replacedHome.startsWith("W ") &&
+            !replacedHome.startsWith("Winner") &&
+            replacedHome !== T1
+          ) {
+            // Replace with T1 since this is SF1
+            replacedHome = T1;
+          }
+        } else if (id === "SF2") {
+          // If home team is a real team name (not a placeholder), it should be T2
+          if (
+            replacedHome &&
+            !replacedHome.startsWith("W ") &&
+            !replacedHome.startsWith("Winner") &&
+            replacedHome !== T2
+          ) {
+            // Replace with T2 since this is SF2
+            replacedHome = T2;
+          }
+        }
+
+        console.log(`Match ${id}:`, {
+          original: { home: match.home, away: match.away },
+          replaced: { home: replacedHome, away: replacedAway },
+          replacements: { T1, T2, "1st Place": T1, "2nd Place": T2 },
+        });
+
         return {
-          home: applyReplacements(match.home),
-          away: applyReplacements(match.away),
+          home: replacedHome,
+          away: replacedAway,
           id: match.id,
         };
       };
 
       // Find matches by their IDs (R8A, R8B, R8C, R8D, QF1, QF2, SF1, SF2, Final)
+      console.log("\n=== FINDING MATCHES BY ID ===");
       const r8a = findMatchById("R8A");
+      console.log("R8A result:", r8a);
       const r8b = findMatchById("R8B");
+      console.log("R8B result:", r8b);
       const r8c = findMatchById("R8C");
+      console.log("R8C result:", r8c);
       const r8d = findMatchById("R8D");
+      console.log("R8D result:", r8d);
       const qf1 = findMatchById("QF1");
+      console.log("QF1 result:", qf1);
       const qf2 = findMatchById("QF2");
+      console.log("QF2 result:", qf2);
       const sf1 = findMatchById("SF1");
+      console.log("SF1 result:", sf1);
       const sf2 = findMatchById("SF2");
+      console.log("SF2 result:", sf2);
       const f1 = findMatchById("Final");
+      console.log("Final result:", f1);
+
+      // Check if any matches are the same
+      const roundOf8Matches = [r8a, r8b, r8c, r8d].filter(
+        (m): m is NonNullable<typeof r8a> => m !== null
+      );
+      const matchStrings = roundOf8Matches.map((m) => `${m.home} vs ${m.away}`);
+      const uniqueMatches = [...new Set(matchStrings)];
+      if (matchStrings.length !== uniqueMatches.length) {
+        console.warn("⚠️  DUPLICATE MATCHUPS IN ROUND OF 8!");
+        console.warn("  All matches:", matchStrings);
+        console.warn("  Unique matches:", uniqueMatches);
+      }
 
       // Build bracket structure matching the schedule labels
       const newBracket = {
@@ -309,10 +449,32 @@ export default function Home() {
         },
         gameweek35_36: {
           left: sf1
-            ? { teams: [sf1.home, sf1.away] as [string, string], id: sf1.id }
+            ? {
+                teams: [
+                  // Ensure SF1 home team is always T1 (1st place from league table)
+                  sf1.home &&
+                  !sf1.home.startsWith("W ") &&
+                  !sf1.home.startsWith("Winner")
+                    ? T1
+                    : sf1.home,
+                  sf1.away,
+                ] as [string, string],
+                id: sf1.id,
+              }
             : { teams: ["", ""] as [string, string], id: undefined },
           right: sf2
-            ? { teams: [sf2.home, sf2.away] as [string, string], id: sf2.id }
+            ? {
+                teams: [
+                  // Ensure SF2 home team is always T2 (2nd place from league table)
+                  sf2.home &&
+                  !sf2.home.startsWith("W ") &&
+                  !sf2.home.startsWith("Winner")
+                    ? T2
+                    : sf2.home,
+                  sf2.away,
+                ] as [string, string],
+                id: sf2.id,
+              }
             : { teams: ["", ""] as [string, string], id: undefined },
         },
         final: f1
@@ -324,6 +486,198 @@ export default function Home() {
       };
 
       console.log("New bracket from schedule:", newBracket);
+
+      // Analyze bracket structure for balance
+      console.log("\n=== BRACKET STRUCTURE ANALYSIS ===");
+      console.log("Round of 8 (Left):");
+      console.log("  R8A:", r8a ? `${r8a.home} vs ${r8a.away}` : "Not found");
+      console.log("  R8B:", r8b ? `${r8b.home} vs ${r8b.away}` : "Not found");
+      console.log("Round of 8 (Right):");
+      console.log("  R8C:", r8c ? `${r8c.home} vs ${r8c.away}` : "Not found");
+      console.log("  R8D:", r8d ? `${r8d.home} vs ${r8d.away}` : "Not found");
+      console.log("\nQuarter-Finals:");
+      console.log(
+        "  QF1 (Left):",
+        qf1 ? `${qf1.home} vs ${qf1.away}` : "Not found"
+      );
+      console.log(
+        "  QF2 (Right):",
+        qf2 ? `${qf2.home} vs ${qf2.away}` : "Not found"
+      );
+      console.log("\nSemi-Finals:");
+      console.log(
+        "  SF1 (Left):",
+        sf1 ? `${sf1.home} vs ${sf1.away}` : "Not found"
+      );
+      console.log(
+        "  SF2 (Right):",
+        sf2 ? `${sf2.home} vs ${sf2.away}` : "Not found"
+      );
+      console.log("\nFinal:", f1 ? `${f1.home} vs ${f1.away}` : "Not found");
+      console.log("\n=== VERIFICATION ===");
+
+      // Verify all teams are represented
+      const allRoundOf8Teams = [
+        r8a?.home,
+        r8a?.away,
+        r8b?.home,
+        r8b?.away,
+        r8c?.home,
+        r8c?.away,
+        r8d?.home,
+        r8d?.away,
+      ].filter(Boolean);
+
+      const expectedTeams = [A1, A2, B1, B2, C1, C2, WC1, WC2];
+      const missingTeams = expectedTeams.filter(
+        (team): team is string =>
+          team !== undefined && !allRoundOf8Teams.includes(team)
+      );
+      const extraTeams = allRoundOf8Teams.filter(
+        (team): team is string =>
+          team !== undefined && !expectedTeams.includes(team)
+      );
+
+      if (missingTeams.length > 0) {
+        console.warn("⚠️  Missing teams in Round of 8:", missingTeams);
+      } else {
+        console.log("✅ All expected teams present in Round of 8");
+      }
+
+      if (extraTeams.length > 0) {
+        console.warn("⚠️  Unexpected teams in Round of 8:", extraTeams);
+      }
+
+      // Check for duplicates
+      const uniqueTeams = [...new Set(allRoundOf8Teams)];
+      if (allRoundOf8Teams.length !== uniqueTeams.length) {
+        console.warn("⚠️  Duplicate teams found in Round of 8!");
+        const duplicates = allRoundOf8Teams.filter(
+          (team, index) => allRoundOf8Teams.indexOf(team) !== index
+        );
+        console.warn("  Duplicates:", [...new Set(duplicates)]);
+      } else {
+        console.log("✅ No duplicate teams in Round of 8");
+      }
+
+      console.log("\n=== SEEDING ANALYSIS ===");
+
+      // Check if wildcards play each other
+      if (
+        r8d &&
+        (r8d.home === WC1 || r8d.home === WC2) &&
+        (r8d.away === WC1 || r8d.away === WC2)
+      ) {
+        console.log(
+          "ℹ️  Wildcards play each other in R8D - easier path for wildcards"
+        );
+      } else if (r8a && r8b && r8c && r8d) {
+        // Check if wildcards are separated
+        const r8aHasWC =
+          r8a.home === WC1 ||
+          r8a.home === WC2 ||
+          r8a.away === WC1 ||
+          r8a.away === WC2;
+        const r8bHasWC =
+          r8b.home === WC1 ||
+          r8b.home === WC2 ||
+          r8b.away === WC1 ||
+          r8b.away === WC2;
+        const r8cHasWC =
+          r8c.home === WC1 ||
+          r8c.home === WC2 ||
+          r8c.away === WC1 ||
+          r8c.away === WC2;
+        const r8dHasWC =
+          r8d.home === WC1 ||
+          r8d.home === WC2 ||
+          r8d.away === WC1 ||
+          r8d.away === WC2;
+        const wcCount = [r8aHasWC, r8bHasWC, r8cHasWC, r8dHasWC].filter(
+          Boolean
+        ).length;
+        if (wcCount === 2) {
+          console.log("✅ Wildcards are separated (one per matchup)");
+        }
+      }
+
+      // Check group winner distribution
+      const leftBracketTeams = [
+        r8a?.home,
+        r8a?.away,
+        r8b?.home,
+        r8b?.away,
+      ].filter(Boolean);
+      const rightBracketTeams = [
+        r8c?.home,
+        r8c?.away,
+        r8d?.home,
+        r8d?.away,
+      ].filter(Boolean);
+
+      const groupWinnersInLeft = [A1, B1, C1].filter((winner) =>
+        leftBracketTeams.some((team) => team === winner)
+      );
+      const groupWinnersInRight = [A1, B1, C1].filter((winner) =>
+        rightBracketTeams.some((team) => team === winner)
+      );
+
+      console.log(
+        `Group winners in left bracket: ${
+          groupWinnersInLeft.length
+        } (${groupWinnersInLeft.join(", ")})`
+      );
+      console.log(
+        `Group winners in right bracket: ${
+          groupWinnersInRight.length
+        } (${groupWinnersInRight.join(", ")})`
+      );
+
+      if (groupWinnersInLeft.length !== groupWinnersInRight.length) {
+        console.log(
+          "⚠️  Uneven distribution of group winners between brackets"
+        );
+
+        // Suggest balancing by moving highest 2nd place to the side with fewer group winners
+        if (highestSecondPlace) {
+          const highestSecondPlaceName = highestSecondPlace.name;
+          const isHighestSecondPlaceOnLeft = leftBracketTeams.includes(
+            highestSecondPlaceName
+          );
+          const sideWithFewerWinners =
+            groupWinnersInLeft.length < groupWinnersInRight.length
+              ? "left"
+              : "right";
+          const sideWithMoreWinners =
+            groupWinnersInLeft.length > groupWinnersInRight.length
+              ? "left"
+              : "right";
+
+          if (isHighestSecondPlaceOnLeft && sideWithMoreWinners === "left") {
+            console.log(
+              `💡 Suggestion: Move ${highestSecondPlaceName} (highest 2nd place, ${highestSecondPlace.pts} pts) to the ${sideWithFewerWinners} bracket to balance strength`
+            );
+          } else if (
+            !isHighestSecondPlaceOnLeft &&
+            sideWithMoreWinners === "right"
+          ) {
+            console.log(
+              `💡 Suggestion: Move ${highestSecondPlaceName} (highest 2nd place, ${highestSecondPlace.pts} pts) to the ${sideWithFewerWinners} bracket to balance strength`
+            );
+          }
+        }
+      } else {
+        console.log("✅ Group winners evenly distributed");
+      }
+
+      // Check T1 and T2 paths
+      console.log(
+        `\nT1 (${T1}) path: SF1 → faces winner of QF1 (${qf1?.home} vs ${qf1?.away})`
+      );
+      console.log(
+        `T2 (${T2}) path: SF2 → faces winner of QF2 (${qf2?.home} vs ${qf2?.away})`
+      );
+
       setPlayoffBracket(newBracket);
     } else {
       console.log(
@@ -394,10 +748,16 @@ export default function Home() {
     return teamName === qualifiers.WC1 || teamName === qualifiers.WC2;
   };
 
+  // Helper function to check if a team is in the top 2 positions (T1 or T2)
+  const isTopSeed = (teamName: string): boolean => {
+    if (!qualifiers) return false;
+    return teamName === qualifiers.T1 || teamName === qualifiers.T2;
+  };
+
   // Helper function to get styling for a team cell
   const getTeamCellStyle = (teamName: string, hasIdAbove = false): string => {
     const baseClasses = hasIdAbove ? "border-t-0" : "rounded-t";
-    if (teamName === "Gladidz" || teamName === "GoonterPunch FC") {
+    if (isTopSeed(teamName)) {
       return `border border-green-700/50 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-green-900/30`;
     }
     if (isWildcard(teamName)) {
@@ -412,6 +772,9 @@ export default function Home() {
     hasIdAbove = false
   ): string => {
     const baseClasses = hasIdAbove ? "border-t-0" : "rounded-t";
+    if (isTopSeed(teamName)) {
+      return `border-2 border-green-700/50 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-green-900/30`;
+    }
     if (isWildcard(teamName)) {
       return `border-2 border-blue-700/50 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-blue-900/30`;
     }
@@ -463,8 +826,7 @@ export default function Home() {
                           className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
                             isWildcard(match.teams[1])
                               ? "bg-blue-900/30 border-blue-700/50"
-                              : match.teams[1] === "Gladidz" ||
-                                match.teams[1] === "GoonterPunch FC"
+                              : isTopSeed(match.teams[1])
                               ? "bg-green-900/30 border-green-700/50"
                               : "bg-slate-700"
                           }`}
@@ -499,10 +861,9 @@ export default function Home() {
                       className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
                         isWildcard(playoffBracket.gameweek33_34.left.teams[1])
                           ? "bg-blue-900/30 border-blue-700/50"
-                          : playoffBracket.gameweek33_34.left.teams[1] ===
-                              "Gladidz" ||
-                            playoffBracket.gameweek33_34.left.teams[1] ===
-                              "GoonterPunch FC"
+                          : isTopSeed(
+                              playoffBracket.gameweek33_34.left.teams[1]
+                            )
                           ? "bg-green-900/30 border-green-700/50"
                           : "bg-slate-700"
                       }`}
@@ -535,10 +896,9 @@ export default function Home() {
                       className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
                         isWildcard(playoffBracket.gameweek35_36.left.teams[1])
                           ? "bg-blue-900/30 border-blue-700/50"
-                          : playoffBracket.gameweek35_36.left.teams[1] ===
-                              "Gladidz" ||
-                            playoffBracket.gameweek35_36.left.teams[1] ===
-                              "GoonterPunch FC"
+                          : isTopSeed(
+                              playoffBracket.gameweek35_36.left.teams[1]
+                            )
                           ? "bg-green-900/30 border-green-700/50"
                           : "bg-slate-700"
                       }`}
@@ -571,8 +931,7 @@ export default function Home() {
                       className={`border-2 border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center ${
                         isWildcard(playoffBracket.final.teams[1])
                           ? "bg-blue-900/30 border-blue-700/50"
-                          : playoffBracket.final.teams[1] === "Gladidz" ||
-                            playoffBracket.final.teams[1] === "GoonterPunch FC"
+                          : isTopSeed(playoffBracket.final.teams[1])
                           ? "bg-green-900/30 border-green-700/50"
                           : "bg-slate-700"
                       }`}
@@ -605,10 +964,9 @@ export default function Home() {
                       className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
                         isWildcard(playoffBracket.gameweek35_36.right.teams[1])
                           ? "bg-blue-900/30 border-blue-700/50"
-                          : playoffBracket.gameweek35_36.right.teams[1] ===
-                              "Gladidz" ||
-                            playoffBracket.gameweek35_36.right.teams[1] ===
-                              "GoonterPunch FC"
+                          : isTopSeed(
+                              playoffBracket.gameweek35_36.right.teams[1]
+                            )
                           ? "bg-green-900/30 border-green-700/50"
                           : "bg-slate-700"
                       }`}
@@ -641,10 +999,9 @@ export default function Home() {
                       className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
                         isWildcard(playoffBracket.gameweek33_34.right.teams[1])
                           ? "bg-blue-900/30 border-blue-700/50"
-                          : playoffBracket.gameweek33_34.right.teams[1] ===
-                              "Gladidz" ||
-                            playoffBracket.gameweek33_34.right.teams[1] ===
-                              "GoonterPunch FC"
+                          : isTopSeed(
+                              playoffBracket.gameweek33_34.right.teams[1]
+                            )
                           ? "bg-green-900/30 border-green-700/50"
                           : "bg-slate-700"
                       }`}
@@ -679,8 +1036,7 @@ export default function Home() {
                           className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
                             isWildcard(match.teams[1])
                               ? "bg-blue-900/30 border-blue-700/50"
-                              : match.teams[1] === "Gladidz" ||
-                                match.teams[1] === "GoonterPunch FC"
+                              : isTopSeed(match.teams[1])
                               ? "bg-green-900/30 border-green-700/50"
                               : "bg-slate-700"
                           }`}
@@ -767,7 +1123,7 @@ export default function Home() {
                 League Table
               </h2>
               <div className="overflow-x-auto">
-                <table className="border-collapse">
+                <table className="border-collapse w-full">
                   <thead>
                     <tr className="bg-slate-700 border-b-2 border-slate-600">
                       <th className="text-left py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
@@ -841,13 +1197,14 @@ export default function Home() {
                     );
 
                   // Sort 3rd place teams by points, then GD, and take top 2
-                  const wildcards = [...thirdPlaceTeams]
+                  // Store just the team names for consistent comparison (same as qualifiers)
+                  const wildcardTeamNames = [...thirdPlaceTeams]
                     .sort((a, b) => {
                       if (b.pts !== a.pts) return (b.pts || 0) - (a.pts || 0);
                       return (b.gd || 0) - (a.gd || 0);
                     })
                     .slice(0, 2)
-                    .map((team) => `${team.name}-${team.groupIndex}`);
+                    .map((team) => team.name);
 
                   return groups.map((group, groupIndex) => {
                     // Sort group by points (desc) then GD (desc)
@@ -859,13 +1216,13 @@ export default function Home() {
                     return (
                       <div
                         key={groupIndex}
-                        className="border border-slate-600 rounded-lg p-3 bg-slate-700/30"
+                        className="border border-slate-600 rounded-lg p-3 bg-slate-700/30 w-full"
                       >
                         <h3 className="text-sm font-semibold text-slate-200 mb-2">
                           Group {String.fromCharCode(65 + groupIndex)}
                         </h3>
                         <div className="overflow-x-auto">
-                          <table className="border-collapse">
+                          <table className="border-collapse w-full">
                             <thead>
                               <tr className="bg-slate-700 border-b border-slate-600">
                                 <th className="text-left py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
@@ -889,8 +1246,8 @@ export default function Home() {
                               {sortedGroup.map((team, position) => {
                                 const isQualified =
                                   position === 0 || position === 1; // 1st or 2nd
-                                const isWildcard = wildcards.includes(
-                                  `${team.name}-${groupIndex}`
+                                const isWildcard = wildcardTeamNames.includes(
+                                  team.name
                                 );
 
                                 let rowClass =

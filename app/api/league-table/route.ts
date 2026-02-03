@@ -5,8 +5,18 @@ export async function GET() {
   try {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
     if (!spreadsheetId) {
+      console.error("GOOGLE_SHEET_ID is not set");
       return NextResponse.json(
-        { error: "Google Sheet ID not configured" },
+        { error: "Google Sheet ID not configured. Please set GOOGLE_SHEET_ID environment variable." },
+        { status: 500 }
+      );
+    }
+
+    // Check if credentials are available
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      console.error("Google Sheets credentials are missing");
+      return NextResponse.json(
+        { error: "Google Sheets credentials not configured. Please set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY environment variables." },
         { status: 500 }
       );
     }
@@ -21,10 +31,14 @@ export async function GET() {
     }));
 
     return NextResponse.json(leagueTable);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching league table:", error);
     return NextResponse.json(
-      { error: "Failed to fetch league table" },
+      { 
+        error: "Failed to fetch league table",
+        message: error.message || "Unknown error",
+        details: process.env.NODE_ENV === "development" ? error.toString() : undefined
+      },
       { status: 500 }
     );
   }
