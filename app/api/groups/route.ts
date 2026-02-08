@@ -11,33 +11,99 @@ export async function GET() {
       );
     }
 
-    // Assuming groups are in sheets named "Group A", "Group B", "Group C"
-    // Format: Team | Pts | GF | GA | GD
-    const groups = [];
+    // First, get team names from Group sheets to know which teams are in which groups
+    const groups: { name: string; pts: number; gf: number; ga: number; gd: number }[][] = [];
     const groupNames = ["A", "B", "C"];
+    const teamToGroupMap = new Map<string, number>(); // team name -> group index
 
-    for (const groupName of groupNames) {
+    for (let groupIndex = 0; groupIndex < groupNames.length; groupIndex++) {
+      const groupName = groupNames[groupIndex];
       const data = await getSheetData(
         spreadsheetId,
         `Group ${groupName}!A2:E4`
       );
 
-      const group = data.map((row) => ({
-        name: row[0] || "",
-        pts: parseInt(row[1]) || 0,
-        gf: parseInt(row[2]) || 0,
-        ga: parseInt(row[3]) || 0,
-        gd: parseInt(row[4]) || 0,
-      }));
+      const group = data.map((row) => {
+        const teamName = row[0] || "";
+        // Map team name to group index
+        teamToGroupMap.set(teamName, groupIndex);
+        return {
+          name: teamName,
+          pts: 0, // Will calculate from schedule
+          gf: 0,
+          ga: 0,
+          gd: 0,
+        };
+      });
 
       groups.push(group);
+    }
+
+    // Now fetch schedule to calculate stats from match results
+    // Group stage matches are typically gameweeks 25-30 (before playoffs start at 31)
+    const scheduleData = await getSheetData(spreadsheetId, "Schedule!A2:G200");
+
+    // Process all matches and calculate stats for group stage (gameweeks 25-30)
+    for (const row of scheduleData) {
+      if (row.length < 4) continue;
+
+      const gameweek = parseInt(row[1]); // Gameweek is in column B (index 1)
+      if (isNaN(gameweek) || gameweek < 25 || gameweek > 30) continue; // Only group stage matches
+
+      const home = row[2] || "";
+      const away = row[3] || "";
+      const homeGoalsStr = row[5]?.toString().trim();
+      const awayGoalsStr = row[6]?.toString().trim();
+
+      // Skip if no scores or if either team is BYE
+      if (!homeGoalsStr || !awayGoalsStr || home === "BYE" || away === "BYE") continue;
+
+      const homeGoals = parseInt(homeGoalsStr);
+      const awayGoals = parseInt(awayGoalsStr);
+
+      if (isNaN(homeGoals) || isNaN(awayGoals)) continue;
+
+      // Find teams in groups and update their stats
+      const homeGroupIndex = teamToGroupMap.get(home);
+      const awayGroupIndex = teamToGroupMap.get(away);
+
+      // Only process if both teams are in groups (not in league table only)
+      if (homeGroupIndex !== undefined) {
+        const homeTeam = groups[homeGroupIndex].find((t) => t.name === home);
+        if (homeTeam) {
+          homeTeam.gf += homeGoals;
+          homeTeam.ga += awayGoals;
+          homeTeam.gd = homeTeam.gf - homeTeam.ga;
+          // Points: 3 for win, 1 for draw, 0 for loss
+          if (homeGoals > awayGoals) {
+            homeTeam.pts += 3;
+          } else if (homeGoals === awayGoals) {
+            homeTeam.pts += 1;
+          }
+        }
+      }
+
+      if (awayGroupIndex !== undefined) {
+        const awayTeam = groups[awayGroupIndex].find((t) => t.name === away);
+        if (awayTeam) {
+          awayTeam.gf += awayGoals;
+          awayTeam.ga += homeGoals;
+          awayTeam.gd = awayTeam.gf - awayTeam.ga;
+          // Points: 3 for win, 1 for draw, 0 for loss
+          if (awayGoals > homeGoals) {
+            awayTeam.pts += 3;
+          } else if (awayGoals === homeGoals) {
+            awayTeam.pts += 1;
+          }
+        }
+      }
     }
 
     return NextResponse.json(groups);
   } catch (error) {
     console.error("Error fetching groups:", error);
     return NextResponse.json(
-      { error: "Failed to fetch groups" },
+      { error: "Failed to fetch groups", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
