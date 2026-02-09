@@ -1069,13 +1069,13 @@ export default function Home() {
                     <table className="border-collapse">
                       <thead>
                         <tr className="bg-slate-700 border-b border-slate-600">
-                          <th className="text-right py-1.5 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[120px]">
+                          <th className="text-right py-1.5 px-1 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[120px]">
                             HOME
                           </th>
-                          <th className="text-center py-1.5 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[60px]">
+                          <th className="text-center py-1.5 px-1 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[100px]">
                             RESULT
                           </th>
-                          <th className="text-left py-1.5 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[120px]">
+                          <th className="text-left py-1.5 px-1 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[120px]">
                             AWAY
                           </th>
                         </tr>
@@ -1091,17 +1091,23 @@ export default function Home() {
                               key={index}
                               className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
                             >
-                              <td className="py-1.5 px-2 text-[10px] font-medium text-white whitespace-nowrap text-right min-w-[120px]">
+                              <td className="py-1.5 px-1 text-[10px] font-medium text-white whitespace-nowrap text-right min-w-[120px]">
                                 {match.home}
                               </td>
-                              <td className="py-1.5 px-2 text-center min-w-[60px]">
+                              <td className="py-1.5 px-1 text-center min-w-[100px] whitespace-nowrap">
                                 {hasScore && (
-                                  <span className="text-[14px] font-bold text-white">
-                                    {match.homeGoals} - {match.awayGoals}
+                                  <span className="text-[14px] font-bold text-white flex items-center justify-center gap-1">
+                                    <span className="text-right w-8 tabular-nums">
+                                      {match.homeGoals}
+                                    </span>
+                                    <span>:</span>
+                                    <span className="text-left w-8 tabular-nums">
+                                      {match.awayGoals}
+                                    </span>
                                   </span>
                                 )}
                               </td>
-                              <td className="py-1.5 px-2 text-[10px] font-medium text-white whitespace-nowrap text-left min-w-[120px]">
+                              <td className="py-1.5 px-1 text-[10px] font-medium text-white whitespace-nowrap text-left min-w-[120px]">
                                 {match.away}
                               </td>
                             </tr>
@@ -1261,10 +1267,22 @@ export default function Home() {
                                     " bg-blue-900/30 border-blue-700/50";
                                 }
 
+                                // Add "x " prefix to teams that don't qualify (3rd place, not wildcard)
+                                const shouldShowX = !isQualified && !isWildcard;
+
                                 return (
                                   <tr key={position} className={rowClass}>
                                     <td className="py-2 px-2 text-[10px] font-medium text-white whitespace-nowrap">
-                                      {team.name}
+                                      {shouldShowX ? (
+                                        <>
+                                          <span className="text-red-500">
+                                            x
+                                          </span>{" "}
+                                          {team.name}
+                                        </>
+                                      ) : (
+                                        team.name
+                                      )}
                                     </td>
                                     <td className="py-2 px-2 text-[10px] text-center text-slate-300 whitespace-nowrap">
                                       {team.pts}

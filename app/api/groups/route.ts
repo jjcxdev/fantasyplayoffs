@@ -12,7 +12,13 @@ export async function GET() {
     }
 
     // First, get team names from Group sheets to know which teams are in which groups
-    const groups: { name: string; pts: number; gf: number; ga: number; gd: number }[][] = [];
+    const groups: {
+      name: string;
+      pts: number;
+      gf: number;
+      ga: number;
+      gd: number;
+    }[][] = [];
     const groupNames = ["A", "B", "C"];
     const teamToGroupMap = new Map<string, number>(); // team name -> group index
 
@@ -55,19 +61,55 @@ export async function GET() {
       const homeGoalsStr = row[5]?.toString().trim();
       const awayGoalsStr = row[6]?.toString().trim();
 
-      // Skip if no scores or if either team is BYE
-      if (!homeGoalsStr || !awayGoalsStr || home === "BYE" || away === "BYE") continue;
+      // Handle BYE matches: team playing BYE only gets GF counted, no points
+      const isHomeBye = home === "BYE";
+      const isAwayBye = away === "BYE";
+
+      if (isHomeBye && isAwayBye) continue; // Skip BYE vs BYE
+
+      // Find teams in groups
+      const homeGroupIndex = teamToGroupMap.get(home);
+      const awayGroupIndex = teamToGroupMap.get(away);
+
+      // Handle case where home team plays against BYE
+      if (isAwayBye && homeGroupIndex !== undefined) {
+        const homeTeam = groups[homeGroupIndex].find((t) => t.name === home);
+        if (homeTeam) {
+          const homeGoals =
+            homeGoalsStr && !isNaN(parseInt(homeGoalsStr))
+              ? parseInt(homeGoalsStr)
+              : 0;
+          homeTeam.gf += homeGoals;
+          // No points, no GA, just GF for BYE matches
+          homeTeam.gd = homeTeam.gf - homeTeam.ga;
+        }
+        continue;
+      }
+
+      // Handle case where away team plays against BYE
+      if (isHomeBye && awayGroupIndex !== undefined) {
+        const awayTeam = groups[awayGroupIndex].find((t) => t.name === away);
+        if (awayTeam) {
+          const awayGoals =
+            awayGoalsStr && !isNaN(parseInt(awayGoalsStr))
+              ? parseInt(awayGoalsStr)
+              : 0;
+          awayTeam.gf += awayGoals;
+          // No points, no GA, just GF for BYE matches
+          awayTeam.gd = awayTeam.gf - awayTeam.ga;
+        }
+        continue;
+      }
+
+      // Regular match: both teams are real teams
+      if (!homeGoalsStr || !awayGoalsStr) continue; // Skip if no scores
 
       const homeGoals = parseInt(homeGoalsStr);
       const awayGoals = parseInt(awayGoalsStr);
 
       if (isNaN(homeGoals) || isNaN(awayGoals)) continue;
 
-      // Find teams in groups and update their stats
-      const homeGroupIndex = teamToGroupMap.get(home);
-      const awayGroupIndex = teamToGroupMap.get(away);
-
-      // Only process if both teams are in groups (not in league table only)
+      // Update stats for both teams
       if (homeGroupIndex !== undefined) {
         const homeTeam = groups[homeGroupIndex].find((t) => t.name === home);
         if (homeTeam) {
@@ -103,7 +145,10 @@ export async function GET() {
   } catch (error) {
     console.error("Error fetching groups:", error);
     return NextResponse.json(
-      { error: "Failed to fetch groups", details: error instanceof Error ? error.message : String(error) },
+      {
+        error: "Failed to fetch groups",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
