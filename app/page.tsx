@@ -748,6 +748,20 @@ export default function Home() {
     return teamName === qualifiers.WC1 || teamName === qualifiers.WC2;
   };
 
+  // Helper function to check if a team is a group winner (1st place in A, B, or C)
+  const isGroupWinner = (teamName: string): boolean => {
+    if (!qualifiers) return false;
+    const winners = [qualifiers.A1, qualifiers.B1, qualifiers.C1];
+    return winners.includes(teamName);
+  };
+
+  // Helper function to check if a team is a group runner-up (2nd place in A, B, or C)
+  const isGroupRunnerUp = (teamName: string): boolean => {
+    if (!qualifiers) return false;
+    const runnersUp = [qualifiers.A2, qualifiers.B2, qualifiers.C2];
+    return runnersUp.includes(teamName);
+  };
+
   // Helper function to check if a team is in the top 2 positions (T1 or T2)
   const isTopSeed = (teamName: string): boolean => {
     if (!qualifiers) return false;
@@ -762,6 +776,12 @@ export default function Home() {
     }
     if (isWildcard(teamName)) {
       return `border border-blue-700/50 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-blue-900/30`;
+    }
+    if (isGroupWinner(teamName)) {
+      return `border border-purple-500/70 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-purple-900/40`;
+    }
+    if (isGroupRunnerUp(teamName)) {
+      return `border border-cyan-500/70 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-cyan-900/40`;
     }
     return `bg-slate-700 border border-slate-600 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center`;
   };
@@ -778,6 +798,12 @@ export default function Home() {
     if (isWildcard(teamName)) {
       return `border-2 border-blue-700/50 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-blue-900/30`;
     }
+     if (isGroupWinner(teamName)) {
+       return `border-2 border-purple-500/70 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-purple-900/40`;
+     }
+     if (isGroupRunnerUp(teamName)) {
+       return `border-2 border-cyan-500/70 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-cyan-900/40`;
+     }
     return `bg-slate-700 border-2 border-slate-600 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center`;
   };
 
@@ -823,13 +849,10 @@ export default function Home() {
                           {match.teams[0]}
                         </div>
                         <div
-                          className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
-                            isWildcard(match.teams[1])
-                              ? "bg-blue-900/30 border-blue-700/50"
-                              : isTopSeed(match.teams[1])
-                              ? "bg-green-900/30 border-green-700/50"
-                              : "bg-slate-700"
-                          }`}
+                          className={`${getTeamCellStyle(
+                            match.teams[1],
+                            true
+                          )} rounded-t-none rounded-b`}
                         >
                           {match.teams[1]}
                         </div>
@@ -858,15 +881,10 @@ export default function Home() {
                       {playoffBracket.gameweek33_34.left.teams[0]}
                     </div>
                     <div
-                      className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
-                        isWildcard(playoffBracket.gameweek33_34.left.teams[1])
-                          ? "bg-blue-900/30 border-blue-700/50"
-                          : isTopSeed(
-                              playoffBracket.gameweek33_34.left.teams[1]
-                            )
-                          ? "bg-green-900/30 border-green-700/50"
-                          : "bg-slate-700"
-                      }`}
+                      className={`${getTeamCellStyle(
+                        playoffBracket.gameweek33_34.left.teams[1],
+                        true
+                      )} rounded-t-none rounded-b`}
                     >
                       {playoffBracket.gameweek33_34.left.teams[1]}
                     </div>
@@ -893,15 +911,10 @@ export default function Home() {
                       {playoffBracket.gameweek35_36.left.teams[0]}
                     </div>
                     <div
-                      className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
-                        isWildcard(playoffBracket.gameweek35_36.left.teams[1])
-                          ? "bg-blue-900/30 border-blue-700/50"
-                          : isTopSeed(
-                              playoffBracket.gameweek35_36.left.teams[1]
-                            )
-                          ? "bg-green-900/30 border-green-700/50"
-                          : "bg-slate-700"
-                      }`}
+                      className={`${getTeamCellStyle(
+                        playoffBracket.gameweek35_36.left.teams[1],
+                        true
+                      )} rounded-t-none rounded-b`}
                     >
                       {playoffBracket.gameweek35_36.left.teams[1]}
                     </div>
@@ -928,13 +941,10 @@ export default function Home() {
                       {playoffBracket.final.teams[0]}
                     </div>
                     <div
-                      className={`border-2 border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center ${
-                        isWildcard(playoffBracket.final.teams[1])
-                          ? "bg-blue-900/30 border-blue-700/50"
-                          : isTopSeed(playoffBracket.final.teams[1])
-                          ? "bg-green-900/30 border-green-700/50"
-                          : "bg-slate-700"
-                      }`}
+                      className={`${getFinalTeamCellStyle(
+                        playoffBracket.final.teams[1],
+                        true
+                      )} rounded-t-none rounded-b`}
                     >
                       {playoffBracket.final.teams[1]}
                     </div>
@@ -961,15 +971,10 @@ export default function Home() {
                       {playoffBracket.gameweek35_36.right.teams[0]}
                     </div>
                     <div
-                      className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
-                        isWildcard(playoffBracket.gameweek35_36.right.teams[1])
-                          ? "bg-blue-900/30 border-blue-700/50"
-                          : isTopSeed(
-                              playoffBracket.gameweek35_36.right.teams[1]
-                            )
-                          ? "bg-green-900/30 border-green-700/50"
-                          : "bg-slate-700"
-                      }`}
+                      className={`${getTeamCellStyle(
+                        playoffBracket.gameweek35_36.right.teams[1],
+                        true
+                      )} rounded-t-none rounded-b`}
                     >
                       {playoffBracket.gameweek35_36.right.teams[1]}
                     </div>
@@ -996,15 +1001,10 @@ export default function Home() {
                       {playoffBracket.gameweek33_34.right.teams[0]}
                     </div>
                     <div
-                      className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
-                        isWildcard(playoffBracket.gameweek33_34.right.teams[1])
-                          ? "bg-blue-900/30 border-blue-700/50"
-                          : isTopSeed(
-                              playoffBracket.gameweek33_34.right.teams[1]
-                            )
-                          ? "bg-green-900/30 border-green-700/50"
-                          : "bg-slate-700"
-                      }`}
+                      className={`${getTeamCellStyle(
+                        playoffBracket.gameweek33_34.right.teams[1],
+                        true
+                      )} rounded-t-none rounded-b`}
                     >
                       {playoffBracket.gameweek33_34.right.teams[1]}
                     </div>
@@ -1033,13 +1033,10 @@ export default function Home() {
                           {match.teams[0]}
                         </div>
                         <div
-                          className={`border border-t-0 border-slate-600 rounded-b px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center ${
-                            isWildcard(match.teams[1])
-                              ? "bg-blue-900/30 border-blue-700/50"
-                              : isTopSeed(match.teams[1])
-                              ? "bg-green-900/30 border-green-700/50"
-                              : "bg-slate-700"
-                          }`}
+                          className={`${getTeamCellStyle(
+                            match.teams[1],
+                            true
+                          )} rounded-t-none rounded-b`}
                         >
                           {match.teams[1]}
                         </div>
@@ -1055,7 +1052,7 @@ export default function Home() {
         {/* Schedule on left, League Table and Groups on right */}
         <div className="flex flex-col lg:flex-row gap-4 items-start mb-4">
           {/* Left: Schedule - single vertical column, fills available space */}
-          <section className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-4 flex-1 text-[10px]">
+          <section className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-4 flex-1 text-[10px] shrink-0">
             <h2 className="text-base font-semibold text-white mb-4">
               Schedule
             </h2>
@@ -1100,7 +1097,7 @@ export default function Home() {
                                     <span className="text-right w-8 tabular-nums">
                                       {match.homeGoals}
                                     </span>
-                                    <span>:</span>
+                                    <span>-</span>
                                     <span className="text-left w-8 tabular-nums">
                                       {match.awayGoals}
                                     </span>
@@ -1122,9 +1119,9 @@ export default function Home() {
           </section>
 
           {/* Right: League Table and Groups stacked vertically */}
-          <div className="flex flex-col gap-4 flex-shrink-0">
+          <div className="flex flex-col gap-4 shrink-0">
             {/* League Table */}
-            <section className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-4 flex-shrink-0">
+            <section className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-4 shrink-0">
               <h2 className="text-xl font-semibold text-white mb-3">
                 League Table
               </h2>
@@ -1180,10 +1177,57 @@ export default function Home() {
             </section>
 
             {/* Groups */}
-            <section className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-4 flex-shrink-0">
+            <section className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-4 shrink-0">
               <h2 className="text-xl font-semibold text-white mb-3">Groups</h2>
               <div className="flex flex-col gap-4">
                 {(() => {
+                  // Build W/D/L stats from group-stage matches (gameweeks 25-30)
+                  const wdlMap: Record<
+                    string,
+                    { w: number; d: number; l: number }
+                  > = {};
+
+                  schedule.forEach((gameweek) => {
+                    if (gameweek.gameweek < 25 || gameweek.gameweek > 30) {
+                      return;
+                    }
+                    gameweek.matches.forEach((match) => {
+                      // Skip if no scores
+                      if (
+                        match.homeGoals === undefined ||
+                        match.awayGoals === undefined
+                      ) {
+                        return;
+                      }
+
+                      const home = match.home;
+                      const away = match.away;
+
+                      // Mirror BYE handling from backend: BYE games do not affect W/D/L
+                      const isHomeBye = home === "BYE";
+                      const isAwayBye = away === "BYE";
+                      if (isHomeBye || isAwayBye) return;
+
+                      if (!wdlMap[home]) {
+                        wdlMap[home] = { w: 0, d: 0, l: 0 };
+                      }
+                      if (!wdlMap[away]) {
+                        wdlMap[away] = { w: 0, d: 0, l: 0 };
+                      }
+
+                      if (match.homeGoals > match.awayGoals) {
+                        wdlMap[home].w += 1;
+                        wdlMap[away].l += 1;
+                      } else if (match.homeGoals < match.awayGoals) {
+                        wdlMap[away].w += 1;
+                        wdlMap[home].l += 1;
+                      } else {
+                        wdlMap[home].d += 1;
+                        wdlMap[away].d += 1;
+                      }
+                    });
+                  });
+
                   // Calculate wildcards: 2 teams with highest points from 3rd place teams
                   const thirdPlaceTeams = groups
                     .map((group, groupIndex) => {
@@ -1238,6 +1282,15 @@ export default function Home() {
                                   Pts
                                 </th>
                                 <th className="text-center py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
+                                  W
+                                </th>
+                                <th className="text-center py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
+                                  D
+                                </th>
+                                <th className="text-center py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
+                                  L
+                                </th>
+                                <th className="text-center py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
                                   GF
                                 </th>
                                 <th className="text-center py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
@@ -1250,8 +1303,13 @@ export default function Home() {
                             </thead>
                             <tbody>
                               {sortedGroup.map((team, position) => {
-                                const isQualified =
-                                  position === 0 || position === 1; // 1st or 2nd
+                                const wdl = wdlMap[team.name] || {
+                                  w: 0,
+                                  d: 0,
+                                  l: 0,
+                                };
+                                const isWinner = position === 0; // 1st
+                                const isRunnerUp = position === 1; // 2nd
                                 const isWildcard = wildcardTeamNames.includes(
                                   team.name
                                 );
@@ -1259,16 +1317,20 @@ export default function Home() {
                                 let rowClass =
                                   "border-b border-slate-700 hover:bg-slate-700/50 transition-colors";
 
-                                if (isQualified) {
+                                if (isWinner) {
                                   rowClass +=
-                                    " bg-green-900/30 border-green-700/50";
+                                    " bg-purple-900/40 border-purple-500/70";
+                                } else if (isRunnerUp) {
+                                  rowClass +=
+                                    " bg-cyan-900/40 border-cyan-500/70";
                                 } else if (isWildcard) {
                                   rowClass +=
                                     " bg-blue-900/30 border-blue-700/50";
                                 }
 
                                 // Add "x " prefix to teams that don't qualify (3rd place, not wildcard)
-                                const shouldShowX = !isQualified && !isWildcard;
+                                const shouldShowX =
+                                  !isWinner && !isRunnerUp && !isWildcard;
 
                                 return (
                                   <tr key={position} className={rowClass}>
@@ -1286,6 +1348,15 @@ export default function Home() {
                                     </td>
                                     <td className="py-2 px-2 text-[10px] text-center text-slate-300 whitespace-nowrap">
                                       {team.pts}
+                                    </td>
+                                    <td className="py-2 px-2 text-[10px] text-center text-slate-300 whitespace-nowrap">
+                                      {wdl.w}
+                                    </td>
+                                    <td className="py-2 px-2 text-[10px] text-center text-slate-300 whitespace-nowrap">
+                                      {wdl.d}
+                                    </td>
+                                    <td className="py-2 px-2 text-[10px] text-center text-slate-300 whitespace-nowrap">
+                                      {wdl.l}
                                     </td>
                                     <td className="py-2 px-2 text-[10px] text-center text-slate-300 whitespace-nowrap">
                                       {team.gf}
