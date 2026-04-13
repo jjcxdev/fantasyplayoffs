@@ -21,14 +21,22 @@ export async function GET() {
       );
     }
 
-    // Assuming league table is in a sheet named "League Table" starting at A1
-    // Format: Position | Team Name
-    const data = await getSheetData(spreadsheetId, "League Table!A2:B12");
+    // League Table: Position (A) | Team Name (B) | Abbreviation (C, optional)
+    const data = await getSheetData(spreadsheetId, "League Table!A2:C12");
 
-    const leagueTable = data.map((row, index) => ({
-      name: row[1] || `Team ${index + 1}`,
-      position: parseInt(row[0]) || index + 1,
-    }));
+    const leagueTable = data.map((row, index) => {
+      const name = String(row[1] ?? "").trim() || `Team ${index + 1}`;
+      const abbrRaw = row[2];
+      const abbr =
+        abbrRaw != null && String(abbrRaw).trim() !== ""
+          ? String(abbrRaw).trim()
+          : undefined;
+      return {
+        name,
+        position: parseInt(String(row[0]), 10) || index + 1,
+        ...(abbr !== undefined ? { abbreviation: abbr } : {}),
+      };
+    });
 
     return NextResponse.json(leagueTable);
   } catch (error: any) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSheetData } from "@/lib/googleSheets";
+import { loadMergedSchedule } from "@/lib/scheduleSheet";
 
 export async function GET() {
   try {
@@ -45,97 +46,76 @@ export async function GET() {
       groups.push(group);
     }
 
-    // Now fetch schedule to calculate stats from match results
-    // Group stage matches are typically gameweeks 25-30 (before playoffs start at 31)
-    const scheduleData = await getSheetData(spreadsheetId, "Schedule!A2:G200");
+    // Schedule from sheet + optional Fantrax scores (same as /api/schedule)
+    const schedule = await loadMergedSchedule(spreadsheetId);
 
-    // Process all matches and calculate stats for group stage (gameweeks 25-30)
-    for (const row of scheduleData) {
-      if (row.length < 4) continue;
+    for (const gw of schedule) {
+      if (gw.gameweek < 25 || gw.gameweek > 30) continue;
 
-      const gameweek = parseInt(row[1]); // Gameweek is in column B (index 1)
-      if (isNaN(gameweek) || gameweek < 25 || gameweek > 30) continue; // Only group stage matches
+      for (const match of gw.matches) {
+        const home = match.home;
+        const away = match.away;
 
-      const home = row[2] || "";
-      const away = row[3] || "";
-      const homeGoalsStr = row[5]?.toString().trim();
-      const awayGoalsStr = row[6]?.toString().trim();
+        const isHomeBye = home === "BYE";
+        const isAwayBye = away === "BYE";
 
-      // Handle BYE matches: team playing BYE only gets GF counted, no points
-      const isHomeBye = home === "BYE";
-      const isAwayBye = away === "BYE";
+        if (isHomeBye && isAwayBye) continue;
 
-      if (isHomeBye && isAwayBye) continue; // Skip BYE vs BYE
+        const homeGroupIndex = teamToGroupMap.get(home);
+        const awayGroupIndex = teamToGroupMap.get(away);
 
-      // Find teams in groups
-      const homeGroupIndex = teamToGroupMap.get(home);
-      const awayGroupIndex = teamToGroupMap.get(away);
-
-      // Handle case where home team plays against BYE
-      if (isAwayBye && homeGroupIndex !== undefined) {
-        const homeTeam = groups[homeGroupIndex].find((t) => t.name === home);
-        if (homeTeam) {
-          const homeGoals =
-            homeGoalsStr && !isNaN(parseInt(homeGoalsStr))
-              ? parseInt(homeGoalsStr)
-              : 0;
-          homeTeam.gf += homeGoals;
-          // No points, no GA, just GF for BYE matches
-          homeTeam.gd = homeTeam.gf - homeTeam.ga;
+        if (isAwayBye && homeGroupIndex !== undefined) {
+          const homeTeam = groups[homeGroupIndex].find((t) => t.name === home);
+          if (homeTeam) {
+            const homeGoals = match.homeGoals ?? 0;
+            homeTeam.gf += homeGoals;
+            homeTeam.gd = homeTeam.gf - homeTeam.ga;
+          }
+          continue;
         }
-        continue;
-      }
 
-      // Handle case where away team plays against BYE
-      if (isHomeBye && awayGroupIndex !== undefined) {
-        const awayTeam = groups[awayGroupIndex].find((t) => t.name === away);
-        if (awayTeam) {
-          const awayGoals =
-            awayGoalsStr && !isNaN(parseInt(awayGoalsStr))
-              ? parseInt(awayGoalsStr)
-              : 0;
-          awayTeam.gf += awayGoals;
-          // No points, no GA, just GF for BYE matches
-          awayTeam.gd = awayTeam.gf - awayTeam.ga;
+        if (isHomeBye && awayGroupIndex !== undefined) {
+          const awayTeam = groups[awayGroupIndex].find((t) => t.name === away);
+          if (awayTeam) {
+            const awayGoals = match.awayGoals ?? 0;
+            awayTeam.gf += awayGoals;
+            awayTeam.gd = awayTeam.gf - awayTeam.ga;
+          }
+          continue;
         }
-        continue;
-      }
 
-      // Regular match: both teams are real teams
-      if (!homeGoalsStr || !awayGoalsStr) continue; // Skip if no scores
+        if (match.homeGoals === undefined || match.awayGoals === undefined) {
+          continue;
+        }
 
-      const homeGoals = parseInt(homeGoalsStr);
-      const awayGoals = parseInt(awayGoalsStr);
+        const homeGoals = match.homeGoals;
+        const awayGoals = match.awayGoals;
 
-      if (isNaN(homeGoals) || isNaN(awayGoals)) continue;
-
-      // Update stats for both teams
-      if (homeGroupIndex !== undefined) {
-        const homeTeam = groups[homeGroupIndex].find((t) => t.name === home);
-        if (homeTeam) {
-          homeTeam.gf += homeGoals;
-          homeTeam.ga += awayGoals;
-          homeTeam.gd = homeTeam.gf - homeTeam.ga;
-          // Points: 3 for win, 1 for draw, 0 for loss
-          if (homeGoals > awayGoals) {
-            homeTeam.pts += 3;
-          } else if (homeGoals === awayGoals) {
-            homeTeam.pts += 1;
+        if (homeGroupIndex !== undefined) {
+          const homeTeam = groups[homeGroupIndex].find((t) => t.name === home);
+          if (homeTeam) {
+            homeTeam.gf += homeGoals;
+            homeTeam.ga += awayGoals;
+            homeTeam.gd = homeTeam.gf - homeTeam.ga;
+            if (homeGoals > awayGoals) {
+              homeTeam.pts += 3;
+            } else if (homeGoals === awayGoals) {
+              homeTeam.pts += 1;
+            }
           }
         }
-      }
 
-      if (awayGroupIndex !== undefined) {
-        const awayTeam = groups[awayGroupIndex].find((t) => t.name === away);
-        if (awayTeam) {
-          awayTeam.gf += awayGoals;
-          awayTeam.ga += homeGoals;
-          awayTeam.gd = awayTeam.gf - awayTeam.ga;
-          // Points: 3 for win, 1 for draw, 0 for loss
-          if (awayGoals > homeGoals) {
-            awayTeam.pts += 3;
-          } else if (awayGoals === homeGoals) {
-            awayTeam.pts += 1;
+        if (awayGroupIndex !== undefined) {
+          const awayTeam = groups[awayGroupIndex].find((t) => t.name === away);
+          if (awayTeam) {
+            awayTeam.gf += awayGoals;
+            awayTeam.ga += homeGoals;
+            awayTeam.gd = awayTeam.gf - awayTeam.ga;
+            if (awayGoals > homeGoals) {
+              awayTeam.pts += 3;
+            } else if (awayGoals === homeGoals) {
+              awayTeam.pts += 1;
+            }
           }
         }
       }

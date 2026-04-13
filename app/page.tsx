@@ -1,9 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import {
+  applyQualifierNamesToSchedule,
+  computePlayoffAdvancement,
+  displayTeamAfterAdvancement,
+  seriesTotalForDisplayedTeam,
+  type PlayoffAdvancementResult,
+} from "@/lib/playoffAdvancement";
+import {
+  buildTeamAbbreviationMap,
+  formatTeamAbbreviation,
+} from "@/lib/teamAbbreviations";
 
 interface Team {
   name: string;
+  /** Optional `League Table` column C from the sheet. */
+  abbreviation?: string;
   pts?: number;
   gf?: number;
   ga?: number;
@@ -68,6 +81,9 @@ export default function Home() {
     final: { teams: ["Winner Left", "Winner Right"] },
   });
   const [loading, setLoading] = useState(true);
+  /** Two-leg aggregate winners (R8 → QF → SF → Final), keyed by schedule match `id`. */
+  const [playoffAdvancement, setPlayoffAdvancement] =
+    useState<PlayoffAdvancementResult | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -100,7 +116,35 @@ export default function Home() {
         const scheduleRes = await fetch("/api/schedule");
         if (scheduleRes.ok) {
           const scheduleData = await scheduleRes.json();
-          console.log("Schedule data:", scheduleData);
+          console.log("Schedule data (raw):", scheduleData);
+
+          // Debug: scores per gameweek as returned by API (Fantrax merge happens on server)
+          console.group("[schedule] Scores by gameweek (browser — from /api/schedule)");
+          for (const gw of scheduleData as { gameweek: number; matches: unknown[] }[]) {
+            if (gw.gameweek < 25) continue;
+            const rows = (
+              gw.matches as {
+                home: string;
+                away: string;
+                homeGoals?: number;
+                awayGoals?: number;
+                id?: string;
+              }[]
+            ).map((m) => ({
+              id: m.id,
+              home: m.home,
+              away: m.away,
+              homeGoals: m.homeGoals ?? null,
+              awayGoals: m.awayGoals ?? null,
+              bothScores:
+                m.home === "BYE" ||
+                m.away === "BYE" ||
+                (m.homeGoals != null && m.awayGoals != null),
+            }));
+            console.log(`GW ${gw.gameweek}`, rows);
+          }
+          console.groupEnd();
+
           setRawSchedule(scheduleData);
           setSchedule(scheduleData);
         } else {
@@ -311,39 +355,48 @@ export default function Home() {
 
       const allPlayoffMatches = getAllPlayoffMatches();
 
-      // Debug: Check for duplicate IDs
-      console.log("\n=== CHECKING FOR DUPLICATE MATCH IDs ===");
-      const matchIds = allPlayoffMatches.map((m) => m.id).filter(Boolean);
-      const duplicateIds = matchIds.filter(
-        (id, index) => matchIds.indexOf(id) !== index
-      );
-      if (duplicateIds.length > 0) {
-        console.warn("⚠️  DUPLICATE MATCH IDs FOUND:", [
-          ...new Set(duplicateIds),
-        ]);
-        duplicateIds.forEach((dupId) => {
-          const matches = allPlayoffMatches.filter((m) => m.id === dupId);
+      // Debug: duplicate IDs (e.g. same id in GW31 + GW32) — bracket uses earliest GW
+      if (process.env.NODE_ENV === "development") {
+        console.log("\n=== CHECKING FOR DUPLICATE MATCH IDs ===");
+        const matchIds = allPlayoffMatches.map((m) => m.id).filter(Boolean);
+        const duplicateIds = matchIds.filter(
+          (id, index) => matchIds.indexOf(id) !== index
+        );
+        if (duplicateIds.length > 0) {
+          const uniqueDup = [...new Set(duplicateIds)];
           console.warn(
-            `  ID "${dupId}" appears ${matches.length} times:`,
-            matches
+            "⚠️  DUPLICATE MATCH IDs (using earliest gameweek per id):",
+            uniqueDup
           );
-        });
-      } else {
-        console.log("✅ No duplicate match IDs found");
+          uniqueDup.forEach((dupId) => {
+            const gws = allPlayoffMatches
+              .filter((m) => m.id === dupId)
+              .map((m) => m.gameweek)
+              .sort((a, b) => a - b);
+            console.warn(`  "${dupId}" → gameweeks [${gws.join(", ")}]`);
+          });
+        } else {
+          console.log("✅ No duplicate match IDs found");
+        }
+        console.log("All playoff matches:", allPlayoffMatches);
       }
-      console.log("All playoff matches:", allPlayoffMatches);
 
-      // Helper to find match by ID
+      // Helper to find match by ID (if duplicated, prefer smallest gameweek = first leg / canonical row)
       const findMatchById = (id: string) => {
         const matches = allPlayoffMatches.filter((m) => m.id === id);
         if (matches.length === 0) {
-          console.log(`Match with ID ${id} not found`);
+          if (process.env.NODE_ENV === "development") {
+            console.log(`Match with ID ${id} not found`);
+          }
           return null;
         }
-        if (matches.length > 1) {
-          console.warn(`⚠️  Multiple matches found with ID ${id}:`, matches);
+        const sorted = [...matches].sort((a, b) => a.gameweek - b.gameweek);
+        const match = sorted[0];
+        if (matches.length > 1 && process.env.NODE_ENV === "development") {
+          console.warn(
+            `⚠️  ID "${id}" ×${matches.length} — using GW${match.gameweek} (earliest). Use unique IDs in the sheet if rows differ.`
+          );
         }
-        const match = matches[0];
         let replacedHome = applyReplacements(match.home);
         let replacedAway = applyReplacements(match.away);
 
@@ -373,11 +426,13 @@ export default function Home() {
           }
         }
 
-        console.log(`Match ${id}:`, {
-          original: { home: match.home, away: match.away },
-          replaced: { home: replacedHome, away: replacedAway },
-          replacements: { T1, T2, "1st Place": T1, "2nd Place": T2 },
-        });
+        if (process.env.NODE_ENV === "development") {
+          console.log(`Match ${id}:`, {
+            original: { home: match.home, away: match.away },
+            replaced: { home: replacedHome, away: replacedAway },
+            replacements: { T1, T2, "1st Place": T1, "2nd Place": T2 },
+          });
+        }
 
         return {
           home: replacedHome,
@@ -387,25 +442,27 @@ export default function Home() {
       };
 
       // Find matches by their IDs (R8A, R8B, R8C, R8D, QF1, QF2, SF1, SF2, Final)
-      console.log("\n=== FINDING MATCHES BY ID ===");
+      if (process.env.NODE_ENV === "development") {
+        console.log("\n=== FINDING MATCHES BY ID ===");
+      }
       const r8a = findMatchById("R8A");
-      console.log("R8A result:", r8a);
+      if (process.env.NODE_ENV === "development") console.log("R8A result:", r8a);
       const r8b = findMatchById("R8B");
-      console.log("R8B result:", r8b);
+      if (process.env.NODE_ENV === "development") console.log("R8B result:", r8b);
       const r8c = findMatchById("R8C");
-      console.log("R8C result:", r8c);
+      if (process.env.NODE_ENV === "development") console.log("R8C result:", r8c);
       const r8d = findMatchById("R8D");
-      console.log("R8D result:", r8d);
+      if (process.env.NODE_ENV === "development") console.log("R8D result:", r8d);
       const qf1 = findMatchById("QF1");
-      console.log("QF1 result:", qf1);
+      if (process.env.NODE_ENV === "development") console.log("QF1 result:", qf1);
       const qf2 = findMatchById("QF2");
-      console.log("QF2 result:", qf2);
+      if (process.env.NODE_ENV === "development") console.log("QF2 result:", qf2);
       const sf1 = findMatchById("SF1");
-      console.log("SF1 result:", sf1);
+      if (process.env.NODE_ENV === "development") console.log("SF1 result:", sf1);
       const sf2 = findMatchById("SF2");
-      console.log("SF2 result:", sf2);
+      if (process.env.NODE_ENV === "development") console.log("SF2 result:", sf2);
       const f1 = findMatchById("Final");
-      console.log("Final result:", f1);
+      if (process.env.NODE_ENV === "development") console.log("Final result:", f1);
 
       // Check if any matches are the same
       const roundOf8Matches = [r8a, r8b, r8c, r8d].filter(
@@ -678,8 +735,16 @@ export default function Home() {
         `T2 (${T2}) path: SF2 → faces winner of QF2 (${qf2?.home} vs ${qf2?.away})`
       );
 
+      const qualifierNames = { A1, A2, B1, B2, C1, C2, WC1, WC2, T1, T2 };
+      const resolvedForAgg = applyQualifierNamesToSchedule(
+        rawSchedule,
+        qualifierNames
+      );
+      const advancement = computePlayoffAdvancement(resolvedForAgg);
+      setPlayoffAdvancement(advancement);
       setPlayoffBracket(newBracket);
     } else {
+      setPlayoffAdvancement(null);
       console.log(
         "Not calculating bracket - missing data. Groups:",
         groups.length,
@@ -734,6 +799,24 @@ export default function Home() {
     }
   }, [qualifiers, rawSchedule]);
 
+  const abbrevByFullName = useMemo(() => {
+    const extra: string[] = [];
+    for (const g of groups) {
+      for (const t of g) extra.push(t.name);
+    }
+    for (const gw of schedule) {
+      for (const m of gw.matches) {
+        extra.push(m.home, m.away);
+      }
+    }
+    if (playoffAdvancement?.winners) {
+      for (const w of playoffAdvancement.winners.values()) {
+        if (w) extra.push(w);
+      }
+    }
+    return buildTeamAbbreviationMap(leagueTable, extra);
+  }, [leagueTable, groups, schedule, playoffAdvancement]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 py-8 px-4 flex items-center justify-center">
@@ -741,6 +824,13 @@ export default function Home() {
       </div>
     );
   }
+
+  const abbrevLabel = (full: string) =>
+    formatTeamAbbreviation(full, abbrevByFullName);
+
+  /** Schedule cell: qualifiers + advancing winners → abbr (same logic as bracket). */
+  const scheduleTeamResolved = (cell: string) =>
+    displayTeamAfterAdvancement(cell, advWinners);
 
   // Helper function to check if a team name is a wildcard
   const isWildcard = (teamName: string): boolean => {
@@ -771,40 +861,90 @@ export default function Home() {
   // Helper function to get styling for a team cell
   const getTeamCellStyle = (teamName: string, hasIdAbove = false): string => {
     const baseClasses = hasIdAbove ? "border-t-0" : "rounded-t";
+    const layout =
+      "flex justify-between items-center gap-1 min-w-0 text-left";
     if (isTopSeed(teamName)) {
-      return `border border-green-700/50 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-green-900/30`;
+      return `border border-green-700/50 ${baseClasses} px-2 py-1 w-[118px] text-xs font-medium text-white ${layout} bg-green-900/30`;
     }
     if (isWildcard(teamName)) {
-      return `border border-blue-700/50 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-blue-900/30`;
+      return `border border-blue-700/50 ${baseClasses} px-2 py-1 w-[118px] text-xs font-medium text-white ${layout} bg-blue-900/30`;
     }
     if (isGroupWinner(teamName)) {
-      return `border border-purple-500/70 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-purple-900/40`;
+      return `border border-purple-500/70 ${baseClasses} px-2 py-1 w-[118px] text-xs font-medium text-white ${layout} bg-purple-900/40`;
     }
     if (isGroupRunnerUp(teamName)) {
-      return `border border-cyan-500/70 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center bg-cyan-900/40`;
+      return `border border-cyan-500/70 ${baseClasses} px-2 py-1 w-[118px] text-xs font-medium text-white ${layout} bg-cyan-900/40`;
     }
-    return `bg-slate-700 border border-slate-600 ${baseClasses} px-3 py-1.5 w-[180px] text-xs font-medium text-white text-center`;
+    return `bg-slate-700 border border-slate-600 ${baseClasses} px-2 py-1 w-[118px] text-xs font-medium text-white ${layout}`;
   };
 
   // Helper function to get styling for final team cell
+  const advWinners = playoffAdvancement?.winners ?? new Map<string, string | null>();
+  const showAfterAdvancement = (name: string) =>
+    displayTeamAfterAdvancement(name, advWinners);
+
+  const bracketAggPts = (matchId: string | undefined, displayName: string) => {
+    if (!matchId || !playoffAdvancement) return null;
+    const v = seriesTotalForDisplayedTeam(
+      playoffAdvancement.breakdown.get(matchId),
+      displayName
+    );
+    if (v === null) return null;
+    return (
+      <span className="shrink-0 min-w-[1.75rem] text-right tabular-nums font-semibold text-white/95">
+        {v}
+      </span>
+    );
+  };
+
+  const bracketSlot = (raw: string, matchId?: string) => {
+    const full = showAfterAdvancement(raw);
+    const score = bracketAggPts(matchId, full);
+    if (!matchId) {
+      return (
+        <span className="min-w-0 flex-1 truncate" title={full}>
+          {abbrevLabel(full)}
+        </span>
+      );
+    }
+    return (
+      <>
+        <span className="min-w-0 flex-1 truncate pr-1.5" title={full}>
+          {abbrevLabel(full)}
+        </span>
+        <div
+          className="h-3.5 w-px shrink-0 self-center bg-slate-500/60"
+          aria-hidden
+        />
+        {score ?? (
+          <span className="shrink-0 min-w-[1.75rem] text-right text-[10px] font-medium tabular-nums text-slate-500">
+            —
+          </span>
+        )}
+      </>
+    );
+  };
+
   const getFinalTeamCellStyle = (
     teamName: string,
     hasIdAbove = false
   ): string => {
     const baseClasses = hasIdAbove ? "border-t-0" : "rounded-t";
+    const layout =
+      "flex justify-between items-center gap-1 min-w-0 text-left";
     if (isTopSeed(teamName)) {
-      return `border-2 border-green-700/50 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-green-900/30`;
+      return `border-2 border-green-700/50 ${baseClasses} px-2 py-1 w-[128px] text-xs font-medium text-white ${layout} bg-green-900/30`;
     }
     if (isWildcard(teamName)) {
-      return `border-2 border-blue-700/50 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-blue-900/30`;
+      return `border-2 border-blue-700/50 ${baseClasses} px-2 py-1 w-[128px] text-xs font-medium text-white ${layout} bg-blue-900/30`;
     }
      if (isGroupWinner(teamName)) {
-       return `border-2 border-purple-500/70 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-purple-900/40`;
+       return `border-2 border-purple-500/70 ${baseClasses} px-2 py-1 w-[128px] text-xs font-medium text-white ${layout} bg-purple-900/40`;
      }
      if (isGroupRunnerUp(teamName)) {
-       return `border-2 border-cyan-500/70 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center bg-cyan-900/40`;
+       return `border-2 border-cyan-500/70 ${baseClasses} px-2 py-1 w-[128px] text-xs font-medium text-white ${layout} bg-cyan-900/40`;
      }
-    return `bg-slate-700 border-2 border-slate-600 ${baseClasses} px-3 py-1.5 w-[200px] text-xs font-medium text-white text-center`;
+    return `bg-slate-700 border-2 border-slate-600 ${baseClasses} px-2 py-1 w-[128px] text-xs font-medium text-white ${layout}`;
   };
 
   return (
@@ -824,37 +964,37 @@ export default function Home() {
             Playoff Bracket
           </h2>
           <div className="overflow-x-auto">
-            <div className="relative min-w-[1600px] py-4">
+            <div className="relative min-w-[1000px] py-4">
               {/* Bracket with columns - each column has heading and content */}
-              <div className="grid grid-cols-7 gap-6 items-start">
+              <div className="grid grid-cols-7 gap-4 items-start">
                 {/* Left Side - Game Week 31 & 32 */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[180px] text-center">
+                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
                     ROUND OF 8
                   </h3>
                   <div className="flex flex-col gap-3">
                     {playoffBracket.gameweek31_32.left.map((match, index) => (
                       <div key={index} className="flex flex-col">
                         {match.id && (
-                          <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[180px] text-[8px] font-semibold text-white text-center">
+                          <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
                             {match.id}
                           </div>
                         )}
                         <div
                           className={getTeamCellStyle(
-                            match.teams[0],
+                            showAfterAdvancement(match.teams[0]),
                             !!match.id
                           )}
                         >
-                          {match.teams[0]}
+                          {bracketSlot(match.teams[0], match.id)}
                         </div>
                         <div
                           className={`${getTeamCellStyle(
-                            match.teams[1],
+                            showAfterAdvancement(match.teams[1]),
                             true
                           )} rounded-t-none rounded-b`}
                         >
-                          {match.teams[1]}
+                          {bracketSlot(match.teams[1], match.id)}
                         </div>
                       </div>
                     ))}
@@ -863,182 +1003,228 @@ export default function Home() {
 
                 {/* Left Side - Game Week 33 & 34 */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[180px] text-center">
+                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
                     QUARTER-FINALS
                   </h3>
                   <div className="flex flex-col mt-[30px]">
                     {playoffBracket.gameweek33_34.left.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[180px] text-[8px] font-semibold text-white text-center">
+                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
                         {playoffBracket.gameweek33_34.left.id}
                       </div>
                     )}
                     <div
                       className={getTeamCellStyle(
-                        playoffBracket.gameweek33_34.left.teams[0],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek33_34.left.teams[0]
+                        ),
                         !!playoffBracket.gameweek33_34.left.id
                       )}
                     >
-                      {playoffBracket.gameweek33_34.left.teams[0]}
+                      {bracketSlot(
+                        playoffBracket.gameweek33_34.left.teams[0],
+                        playoffBracket.gameweek33_34.left.id
+                      )}
                     </div>
                     <div
                       className={`${getTeamCellStyle(
-                        playoffBracket.gameweek33_34.left.teams[1],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek33_34.left.teams[1]
+                        ),
                         true
                       )} rounded-t-none rounded-b`}
                     >
-                      {playoffBracket.gameweek33_34.left.teams[1]}
+                      {bracketSlot(
+                        playoffBracket.gameweek33_34.left.teams[1],
+                        playoffBracket.gameweek33_34.left.id
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Left Side - Game Week 35 & 36 */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[180px] text-center">
+                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
                     SEMI-FINALS
                   </h3>
                   <div className="flex flex-col mt-[30px]">
                     {playoffBracket.gameweek35_36.left.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[180px] text-[8px] font-semibold text-white text-center">
+                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
                         {playoffBracket.gameweek35_36.left.id}
                       </div>
                     )}
                     <div
                       className={getTeamCellStyle(
-                        playoffBracket.gameweek35_36.left.teams[0],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek35_36.left.teams[0]
+                        ),
                         !!playoffBracket.gameweek35_36.left.id
                       )}
                     >
-                      {playoffBracket.gameweek35_36.left.teams[0]}
+                      {bracketSlot(
+                        playoffBracket.gameweek35_36.left.teams[0],
+                        playoffBracket.gameweek35_36.left.id
+                      )}
                     </div>
                     <div
                       className={`${getTeamCellStyle(
-                        playoffBracket.gameweek35_36.left.teams[1],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek35_36.left.teams[1]
+                        ),
                         true
                       )} rounded-t-none rounded-b`}
                     >
-                      {playoffBracket.gameweek35_36.left.teams[1]}
+                      {bracketSlot(
+                        playoffBracket.gameweek35_36.left.teams[1],
+                        playoffBracket.gameweek35_36.left.id
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Center - Final */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[200px] text-center">
+                  <h3 className="text-xs font-semibold text-white mb-3 w-[128px] text-center">
                     FINAL
                   </h3>
                   <div className="flex flex-col mt-[30px]">
                     {playoffBracket.final.id && (
-                      <div className="bg-slate-600 border-2 border-slate-500 rounded-t px-2 py-1 w-[200px] text-[8px] font-semibold text-white text-center">
+                      <div className="bg-slate-600 border-2 border-slate-500 rounded-t px-2 py-1 w-[128px] text-[8px] font-semibold text-white text-center">
                         {playoffBracket.final.id}
                       </div>
                     )}
                     <div
                       className={getFinalTeamCellStyle(
-                        playoffBracket.final.teams[0],
+                        showAfterAdvancement(playoffBracket.final.teams[0]),
                         !!playoffBracket.final.id
                       )}
                     >
-                      {playoffBracket.final.teams[0]}
+                      {bracketSlot(
+                        playoffBracket.final.teams[0],
+                        playoffBracket.final.id
+                      )}
                     </div>
                     <div
                       className={`${getFinalTeamCellStyle(
-                        playoffBracket.final.teams[1],
+                        showAfterAdvancement(playoffBracket.final.teams[1]),
                         true
                       )} rounded-t-none rounded-b`}
                     >
-                      {playoffBracket.final.teams[1]}
+                      {bracketSlot(
+                        playoffBracket.final.teams[1],
+                        playoffBracket.final.id
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Right Side - Game Week 35 & 36 */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[180px] text-center">
+                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
                     SEMI-FINALS
                   </h3>
                   <div className="flex flex-col mt-[30px]">
                     {playoffBracket.gameweek35_36.right.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[180px] text-[8px] font-semibold text-white text-center">
+                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
                         {playoffBracket.gameweek35_36.right.id}
                       </div>
                     )}
                     <div
                       className={getTeamCellStyle(
-                        playoffBracket.gameweek35_36.right.teams[0],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek35_36.right.teams[0]
+                        ),
                         !!playoffBracket.gameweek35_36.right.id
                       )}
                     >
-                      {playoffBracket.gameweek35_36.right.teams[0]}
+                      {bracketSlot(
+                        playoffBracket.gameweek35_36.right.teams[0],
+                        playoffBracket.gameweek35_36.right.id
+                      )}
                     </div>
                     <div
                       className={`${getTeamCellStyle(
-                        playoffBracket.gameweek35_36.right.teams[1],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek35_36.right.teams[1]
+                        ),
                         true
                       )} rounded-t-none rounded-b`}
                     >
-                      {playoffBracket.gameweek35_36.right.teams[1]}
+                      {bracketSlot(
+                        playoffBracket.gameweek35_36.right.teams[1],
+                        playoffBracket.gameweek35_36.right.id
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Right Side - Game Week 33 & 34 */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[180px] text-center">
+                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
                     QUARTER-FINALS
                   </h3>
                   <div className="flex flex-col mt-[30px]">
                     {playoffBracket.gameweek33_34.right.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[180px] text-[8px] font-semibold text-white text-center">
+                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
                         {playoffBracket.gameweek33_34.right.id}
                       </div>
                     )}
                     <div
                       className={getTeamCellStyle(
-                        playoffBracket.gameweek33_34.right.teams[0],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek33_34.right.teams[0]
+                        ),
                         !!playoffBracket.gameweek33_34.right.id
                       )}
                     >
-                      {playoffBracket.gameweek33_34.right.teams[0]}
+                      {bracketSlot(
+                        playoffBracket.gameweek33_34.right.teams[0],
+                        playoffBracket.gameweek33_34.right.id
+                      )}
                     </div>
                     <div
                       className={`${getTeamCellStyle(
-                        playoffBracket.gameweek33_34.right.teams[1],
+                        showAfterAdvancement(
+                          playoffBracket.gameweek33_34.right.teams[1]
+                        ),
                         true
                       )} rounded-t-none rounded-b`}
                     >
-                      {playoffBracket.gameweek33_34.right.teams[1]}
+                      {bracketSlot(
+                        playoffBracket.gameweek33_34.right.teams[1],
+                        playoffBracket.gameweek33_34.right.id
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Right Side - Game Week 31 & 32 */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[180px] text-center">
+                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
                     ROUND OF 8
                   </h3>
                   <div className="flex flex-col gap-3">
                     {playoffBracket.gameweek31_32.right.map((match, index) => (
                       <div key={index} className="flex flex-col">
                         {match.id && (
-                          <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[180px] text-[8px] font-semibold text-white text-center">
+                          <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
                             {match.id}
                           </div>
                         )}
                         <div
                           className={getTeamCellStyle(
-                            match.teams[0],
+                            showAfterAdvancement(match.teams[0]),
                             !!match.id
                           )}
                         >
-                          {match.teams[0]}
+                          {bracketSlot(match.teams[0], match.id)}
                         </div>
                         <div
                           className={`${getTeamCellStyle(
-                            match.teams[1],
+                            showAfterAdvancement(match.teams[1]),
                             true
                           )} rounded-t-none rounded-b`}
                         >
-                          {match.teams[1]}
+                          {bracketSlot(match.teams[1], match.id)}
                         </div>
                       </div>
                     ))}
@@ -1066,13 +1252,13 @@ export default function Home() {
                     <table className="border-collapse">
                       <thead>
                         <tr className="bg-slate-700 border-b border-slate-600">
-                          <th className="text-right py-1.5 px-1 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[120px]">
+                          <th className="text-right py-1 px-0.5 text-[10px] font-semibold text-slate-200 whitespace-nowrap w-[68px]">
                             HOME
                           </th>
-                          <th className="text-center py-1.5 px-1 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[100px]">
+                          <th className="text-center py-1 px-0.5 text-[10px] font-semibold text-slate-200 whitespace-nowrap w-[76px]">
                             RESULT
                           </th>
-                          <th className="text-left py-1.5 px-1 text-[10px] font-semibold text-slate-200 whitespace-nowrap min-w-[120px]">
+                          <th className="text-left py-1 px-0.5 text-[10px] font-semibold text-slate-200 whitespace-nowrap w-[68px]">
                             AWAY
                           </th>
                         </tr>
@@ -1088,24 +1274,30 @@ export default function Home() {
                               key={index}
                               className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
                             >
-                              <td className="py-1.5 px-1 text-[10px] font-medium text-white whitespace-nowrap text-right min-w-[120px]">
-                                {match.home}
+                              <td
+                                className="py-1 px-0.5 text-[10px] font-medium text-white whitespace-nowrap text-right w-[68px]"
+                                title={scheduleTeamResolved(match.home)}
+                              >
+                                {abbrevLabel(scheduleTeamResolved(match.home))}
                               </td>
-                              <td className="py-1.5 px-1 text-center min-w-[100px] whitespace-nowrap">
+                              <td className="py-1 px-0.5 text-center w-[76px] whitespace-nowrap">
                                 {hasScore && (
-                                  <span className="text-[14px] font-bold text-white flex items-center justify-center gap-1">
-                                    <span className="text-right w-8 tabular-nums">
+                                  <span className="text-[12px] font-bold text-white flex items-center justify-center gap-0.5">
+                                    <span className="text-right w-7 tabular-nums">
                                       {match.homeGoals}
                                     </span>
                                     <span>-</span>
-                                    <span className="text-left w-8 tabular-nums">
+                                    <span className="text-left w-7 tabular-nums">
                                       {match.awayGoals}
                                     </span>
                                   </span>
                                 )}
                               </td>
-                              <td className="py-1.5 px-1 text-[10px] font-medium text-white whitespace-nowrap text-left min-w-[120px]">
-                                {match.away}
+                              <td
+                                className="py-1 px-0.5 text-[10px] font-medium text-white whitespace-nowrap text-left w-[68px]"
+                                title={scheduleTeamResolved(match.away)}
+                              >
+                                {abbrevLabel(scheduleTeamResolved(match.away))}
                               </td>
                             </tr>
                           );
@@ -1135,13 +1327,16 @@ export default function Home() {
                       <th className="text-left py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
                         Team Name
                       </th>
+                      <th className="text-center py-2 px-2 text-[10px] font-semibold text-slate-200 whitespace-nowrap">
+                        Abbr
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {leagueTable.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={2}
+                          colSpan={3}
                           className="py-2 px-2 text-[10px] text-center text-slate-400"
                         >
                           No data available
@@ -1166,6 +1361,9 @@ export default function Home() {
                             </td>
                             <td className="py-2 px-2 text-[10px] font-medium text-white whitespace-nowrap">
                               {team.name}
+                            </td>
+                            <td className="py-2 px-2 text-[10px] font-medium text-slate-200 whitespace-nowrap text-center tabular-nums">
+                              {abbrevLabel(team.name)}
                             </td>
                           </tr>
                         );
@@ -1334,16 +1532,19 @@ export default function Home() {
 
                                 return (
                                   <tr key={position} className={rowClass}>
-                                    <td className="py-2 px-2 text-[10px] font-medium text-white whitespace-nowrap">
+                                    <td
+                                      className="py-2 px-2 text-[10px] font-medium text-white whitespace-nowrap"
+                                      title={team.name}
+                                    >
                                       {shouldShowX ? (
                                         <>
                                           <span className="text-red-500">
                                             x
                                           </span>{" "}
-                                          {team.name}
+                                          {abbrevLabel(team.name)}
                                         </>
                                       ) : (
-                                        team.name
+                                        abbrevLabel(team.name)
                                       )}
                                     </td>
                                     <td className="py-2 px-2 text-[10px] text-center text-slate-300 whitespace-nowrap">
