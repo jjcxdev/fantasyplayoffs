@@ -947,6 +947,212 @@ export default function Home() {
     return `bg-slate-700 border-2 border-slate-600 ${baseClasses} px-2 py-1 w-[128px] text-xs font-medium text-white ${layout}`;
   };
 
+  const r8LeftNodes = playoffBracket.gameweek31_32.left.map((match, index) => (
+    <div key={`m-r8l-${index}`} className="flex flex-col">
+      {match.id && (
+        <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
+          {match.id}
+        </div>
+      )}
+      <div
+        className={getTeamCellStyle(
+          showAfterAdvancement(match.teams[0]),
+          !!match.id
+        )}
+      >
+        {bracketSlot(match.teams[0], match.id)}
+      </div>
+      <div
+        className={`${getTeamCellStyle(
+          showAfterAdvancement(match.teams[1]),
+          true
+        )} rounded-t-none rounded-b`}
+      >
+        {bracketSlot(match.teams[1], match.id)}
+      </div>
+    </div>
+  ));
+
+  const r8RightNodes = playoffBracket.gameweek31_32.right.map((match, index) => (
+    <div key={`m-r8r-${index}`} className="flex flex-col">
+      {match.id && (
+        <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
+          {match.id}
+        </div>
+      )}
+      <div
+        className={getTeamCellStyle(
+          showAfterAdvancement(match.teams[0]),
+          !!match.id
+        )}
+      >
+        {bracketSlot(match.teams[0], match.id)}
+      </div>
+      <div
+        className={`${getTeamCellStyle(
+          showAfterAdvancement(match.teams[1]),
+          true
+        )} rounded-t-none rounded-b`}
+      >
+        {bracketSlot(match.teams[1], match.id)}
+      </div>
+    </div>
+  ));
+
+  const qfLeftBlock = (
+    <div className="flex flex-col mt-[30px] max-lg:mt-0">
+      {playoffBracket.gameweek33_34.left.id && (
+        <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
+          {playoffBracket.gameweek33_34.left.id}
+        </div>
+      )}
+      <div
+        className={getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek33_34.left.teams[0]),
+          !!playoffBracket.gameweek33_34.left.id
+        )}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek33_34.left.teams[0],
+          playoffBracket.gameweek33_34.left.id
+        )}
+      </div>
+      <div
+        className={`${getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek33_34.left.teams[1]),
+          true
+        )} rounded-t-none rounded-b`}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek33_34.left.teams[1],
+          playoffBracket.gameweek33_34.left.id
+        )}
+      </div>
+    </div>
+  );
+
+  const sfLeftBlock = (
+    <div className="flex flex-col mt-[30px] max-lg:mt-0">
+      {playoffBracket.gameweek35_36.left.id && (
+        <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
+          {playoffBracket.gameweek35_36.left.id}
+        </div>
+      )}
+      <div
+        className={getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek35_36.left.teams[0]),
+          !!playoffBracket.gameweek35_36.left.id
+        )}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek35_36.left.teams[0],
+          playoffBracket.gameweek35_36.left.id
+        )}
+      </div>
+      <div
+        className={`${getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek35_36.left.teams[1]),
+          true
+        )} rounded-t-none rounded-b`}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek35_36.left.teams[1],
+          playoffBracket.gameweek35_36.left.id
+        )}
+      </div>
+    </div>
+  );
+
+  const finalBlock = (
+    <div className="flex flex-col mt-[30px] max-lg:mt-0">
+      {playoffBracket.final.id && (
+        <div className="bg-slate-600 border-2 border-slate-500 rounded-t px-2 py-1 w-[128px] text-[8px] font-semibold text-white text-center">
+          {playoffBracket.final.id}
+        </div>
+      )}
+      <div
+        className={getFinalTeamCellStyle(
+          showAfterAdvancement(playoffBracket.final.teams[0]),
+          !!playoffBracket.final.id
+        )}
+      >
+        {bracketSlot(playoffBracket.final.teams[0], playoffBracket.final.id)}
+      </div>
+      <div
+        className={`${getFinalTeamCellStyle(
+          showAfterAdvancement(playoffBracket.final.teams[1]),
+          true
+        )} rounded-t-none rounded-b`}
+      >
+        {bracketSlot(playoffBracket.final.teams[1], playoffBracket.final.id)}
+      </div>
+    </div>
+  );
+
+  const sfRightBlock = (
+    <div className="flex flex-col mt-[30px] max-lg:mt-0">
+      {playoffBracket.gameweek35_36.right.id && (
+        <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
+          {playoffBracket.gameweek35_36.right.id}
+        </div>
+      )}
+      <div
+        className={getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek35_36.right.teams[0]),
+          !!playoffBracket.gameweek35_36.right.id
+        )}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek35_36.right.teams[0],
+          playoffBracket.gameweek35_36.right.id
+        )}
+      </div>
+      <div
+        className={`${getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek35_36.right.teams[1]),
+          true
+        )} rounded-t-none rounded-b`}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek35_36.right.teams[1],
+          playoffBracket.gameweek35_36.right.id
+        )}
+      </div>
+    </div>
+  );
+
+  const qfRightBlock = (
+    <div className="flex flex-col mt-[30px] max-lg:mt-0">
+      {playoffBracket.gameweek33_34.right.id && (
+        <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
+          {playoffBracket.gameweek33_34.right.id}
+        </div>
+      )}
+      <div
+        className={getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek33_34.right.teams[0]),
+          !!playoffBracket.gameweek33_34.right.id
+        )}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek33_34.right.teams[0],
+          playoffBracket.gameweek33_34.right.id
+        )}
+      </div>
+      <div
+        className={`${getTeamCellStyle(
+          showAfterAdvancement(playoffBracket.gameweek33_34.right.teams[1]),
+          true
+        )} rounded-t-none rounded-b`}
+      >
+        {bracketSlot(
+          playoffBracket.gameweek33_34.right.teams[1],
+          playoffBracket.gameweek33_34.right.id
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-900 py-4 px-3">
       <div className="max-w-[1800px] mx-auto">
@@ -963,272 +1169,113 @@ export default function Home() {
           <h2 className="text-xl font-semibold text-white mb-4">
             Playoff Bracket
           </h2>
-          <div className="overflow-x-auto">
+          {/* Mobile: true stepped path converging into the final on the right */}
+          <div className="mx-auto flex w-full max-w-xl flex-row items-center justify-center gap-3 px-1 pb-2 sm:gap-5 lg:hidden">
+            <div className="flex min-w-0 flex-1 flex-col gap-2 pr-3 sm:pr-4">
+              <div className="pl-0">
+                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Round of 8
+                </h3>
+                <div className="flex flex-col gap-3">{r8LeftNodes}</div>
+              </div>
+
+              <div className="pl-6 sm:pl-10">
+                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Quarter-finals
+                </h3>
+                {qfLeftBlock}
+              </div>
+
+              <div className="pl-12 sm:pl-[4.5rem]">
+                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Semi-finals
+                </h3>
+                {sfLeftBlock}
+              </div>
+
+              <div className="pl-12 sm:pl-[4.5rem]">
+                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Semi-finals
+                </h3>
+                {sfRightBlock}
+              </div>
+
+              <div className="pl-6 sm:pl-10">
+                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Quarter-finals
+                </h3>
+                {qfRightBlock}
+              </div>
+
+              <div className="pl-0">
+                <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Round of 8
+                </h3>
+                <div className="flex flex-col gap-3">{r8RightNodes}</div>
+              </div>
+            </div>
+
+            <div className="flex w-[132px] shrink-0 flex-col items-center pt-4 sm:w-[140px] sm:pt-6">
+              <div className="flex flex-col items-center">
+                <h3 className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+                  Final
+                </h3>
+                {finalBlock}
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop: wide bracket */}
+          <div className="hidden overflow-x-auto lg:block">
             <div className="relative min-w-[1000px] py-4">
-              {/* Bracket with columns - each column has heading and content */}
-              <div className="grid grid-cols-7 gap-4 items-start">
-                {/* Left Side - Game Week 31 & 32 */}
-                <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
+              <div className="grid grid-cols-7 items-start gap-4">
+                <div className="flex flex-col lg:pr-3">
+                  <h3 className="mb-3 w-[118px] text-center text-xs font-semibold text-white">
                     ROUND OF 8
                   </h3>
-                  <div className="flex flex-col gap-3">
-                    {playoffBracket.gameweek31_32.left.map((match, index) => (
-                      <div key={index} className="flex flex-col">
-                        {match.id && (
-                          <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
-                            {match.id}
-                          </div>
-                        )}
-                        <div
-                          className={getTeamCellStyle(
-                            showAfterAdvancement(match.teams[0]),
-                            !!match.id
-                          )}
-                        >
-                          {bracketSlot(match.teams[0], match.id)}
-                        </div>
-                        <div
-                          className={`${getTeamCellStyle(
-                            showAfterAdvancement(match.teams[1]),
-                            true
-                          )} rounded-t-none rounded-b`}
-                        >
-                          {bracketSlot(match.teams[1], match.id)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="flex flex-col gap-3">{r8LeftNodes}</div>
                 </div>
 
-                {/* Left Side - Game Week 33 & 34 */}
-                <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
+                <div className="flex flex-col lg:pr-3">
+                  <h3 className="mb-3 w-[118px] text-center text-xs font-semibold text-white">
                     QUARTER-FINALS
                   </h3>
-                  <div className="flex flex-col mt-[30px]">
-                    {playoffBracket.gameweek33_34.left.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
-                        {playoffBracket.gameweek33_34.left.id}
-                      </div>
-                    )}
-                    <div
-                      className={getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek33_34.left.teams[0]
-                        ),
-                        !!playoffBracket.gameweek33_34.left.id
-                      )}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek33_34.left.teams[0],
-                        playoffBracket.gameweek33_34.left.id
-                      )}
-                    </div>
-                    <div
-                      className={`${getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek33_34.left.teams[1]
-                        ),
-                        true
-                      )} rounded-t-none rounded-b`}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek33_34.left.teams[1],
-                        playoffBracket.gameweek33_34.left.id
-                      )}
-                    </div>
-                  </div>
+                  {qfLeftBlock}
                 </div>
 
-                {/* Left Side - Game Week 35 & 36 */}
-                <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
+                <div className="flex flex-col lg:pr-3">
+                  <h3 className="mb-3 w-[118px] text-center text-xs font-semibold text-white">
                     SEMI-FINALS
                   </h3>
-                  <div className="flex flex-col mt-[30px]">
-                    {playoffBracket.gameweek35_36.left.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
-                        {playoffBracket.gameweek35_36.left.id}
-                      </div>
-                    )}
-                    <div
-                      className={getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek35_36.left.teams[0]
-                        ),
-                        !!playoffBracket.gameweek35_36.left.id
-                      )}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek35_36.left.teams[0],
-                        playoffBracket.gameweek35_36.left.id
-                      )}
-                    </div>
-                    <div
-                      className={`${getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek35_36.left.teams[1]
-                        ),
-                        true
-                      )} rounded-t-none rounded-b`}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek35_36.left.teams[1],
-                        playoffBracket.gameweek35_36.left.id
-                      )}
-                    </div>
-                  </div>
+                  {sfLeftBlock}
                 </div>
 
-                {/* Center - Final */}
-                <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[128px] text-center">
+                <div className="flex flex-col lg:pr-3">
+                  <h3 className="mb-3 w-[128px] text-center text-xs font-semibold text-white">
                     FINAL
                   </h3>
-                  <div className="flex flex-col mt-[30px]">
-                    {playoffBracket.final.id && (
-                      <div className="bg-slate-600 border-2 border-slate-500 rounded-t px-2 py-1 w-[128px] text-[8px] font-semibold text-white text-center">
-                        {playoffBracket.final.id}
-                      </div>
-                    )}
-                    <div
-                      className={getFinalTeamCellStyle(
-                        showAfterAdvancement(playoffBracket.final.teams[0]),
-                        !!playoffBracket.final.id
-                      )}
-                    >
-                      {bracketSlot(
-                        playoffBracket.final.teams[0],
-                        playoffBracket.final.id
-                      )}
-                    </div>
-                    <div
-                      className={`${getFinalTeamCellStyle(
-                        showAfterAdvancement(playoffBracket.final.teams[1]),
-                        true
-                      )} rounded-t-none rounded-b`}
-                    >
-                      {bracketSlot(
-                        playoffBracket.final.teams[1],
-                        playoffBracket.final.id
-                      )}
-                    </div>
-                  </div>
+                  {finalBlock}
                 </div>
 
-                {/* Right Side - Game Week 35 & 36 */}
-                <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
+                <div className="flex flex-col lg:pr-3">
+                  <h3 className="mb-3 w-[118px] text-center text-xs font-semibold text-white">
                     SEMI-FINALS
                   </h3>
-                  <div className="flex flex-col mt-[30px]">
-                    {playoffBracket.gameweek35_36.right.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
-                        {playoffBracket.gameweek35_36.right.id}
-                      </div>
-                    )}
-                    <div
-                      className={getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek35_36.right.teams[0]
-                        ),
-                        !!playoffBracket.gameweek35_36.right.id
-                      )}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek35_36.right.teams[0],
-                        playoffBracket.gameweek35_36.right.id
-                      )}
-                    </div>
-                    <div
-                      className={`${getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek35_36.right.teams[1]
-                        ),
-                        true
-                      )} rounded-t-none rounded-b`}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek35_36.right.teams[1],
-                        playoffBracket.gameweek35_36.right.id
-                      )}
-                    </div>
-                  </div>
+                  {sfRightBlock}
                 </div>
 
-                {/* Right Side - Game Week 33 & 34 */}
-                <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
+                <div className="flex flex-col lg:pr-3">
+                  <h3 className="mb-3 w-[118px] text-center text-xs font-semibold text-white">
                     QUARTER-FINALS
                   </h3>
-                  <div className="flex flex-col mt-[30px]">
-                    {playoffBracket.gameweek33_34.right.id && (
-                      <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
-                        {playoffBracket.gameweek33_34.right.id}
-                      </div>
-                    )}
-                    <div
-                      className={getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek33_34.right.teams[0]
-                        ),
-                        !!playoffBracket.gameweek33_34.right.id
-                      )}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek33_34.right.teams[0],
-                        playoffBracket.gameweek33_34.right.id
-                      )}
-                    </div>
-                    <div
-                      className={`${getTeamCellStyle(
-                        showAfterAdvancement(
-                          playoffBracket.gameweek33_34.right.teams[1]
-                        ),
-                        true
-                      )} rounded-t-none rounded-b`}
-                    >
-                      {bracketSlot(
-                        playoffBracket.gameweek33_34.right.teams[1],
-                        playoffBracket.gameweek33_34.right.id
-                      )}
-                    </div>
-                  </div>
+                  {qfRightBlock}
                 </div>
 
-                {/* Right Side - Game Week 31 & 32 */}
                 <div className="flex flex-col">
-                  <h3 className="text-xs font-semibold text-white mb-3 w-[118px] text-center">
+                  <h3 className="mb-3 w-[118px] text-center text-xs font-semibold text-white">
                     ROUND OF 8
                   </h3>
-                  <div className="flex flex-col gap-3">
-                    {playoffBracket.gameweek31_32.right.map((match, index) => (
-                      <div key={index} className="flex flex-col">
-                        {match.id && (
-                          <div className="bg-slate-600 border border-slate-500 rounded-t px-2 py-1 w-[118px] text-[8px] font-semibold text-white text-center">
-                            {match.id}
-                          </div>
-                        )}
-                        <div
-                          className={getTeamCellStyle(
-                            showAfterAdvancement(match.teams[0]),
-                            !!match.id
-                          )}
-                        >
-                          {bracketSlot(match.teams[0], match.id)}
-                        </div>
-                        <div
-                          className={`${getTeamCellStyle(
-                            showAfterAdvancement(match.teams[1]),
-                            true
-                          )} rounded-t-none rounded-b`}
-                        >
-                          {bracketSlot(match.teams[1], match.id)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="flex flex-col gap-3">{r8RightNodes}</div>
                 </div>
               </div>
             </div>
